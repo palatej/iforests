@@ -12,7 +12,9 @@ class IsolationForests{
 public:
   static double innerProduct(const double* X1, const double* X2, unsigned m) ;
   
-  static double cFactor(unsigned N);
+  static double innerProduct(const double* X1, const double* X2, const unsigned* idx, unsigned k) ;
+
+    static double cFactor(unsigned N);
   
   static double findPath(Node* node, const double* x, unsigned m);
 

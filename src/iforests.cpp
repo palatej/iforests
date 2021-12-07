@@ -15,6 +15,15 @@ double IsolationForests::innerProduct(const double* X1, const double* X2, unsign
   return result;
 }
 
+double IsolationForests::innerProduct(const double* X1, const double* X2, const unsigned* idx, unsigned k) {
+  double result = 0.0;
+  for (unsigned i = 0; i < k; i++) {
+    unsigned c=idx[i];
+    result += X1[c] * X2[c];
+  }
+  return result;
+}
+
 double IsolationForests::cFactor(unsigned N) {
   double Nd = (double) N, Ndc = Nd - 1;
   double result;

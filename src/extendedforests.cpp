@@ -4,7 +4,7 @@
 using namespace Rcpp;
 
 Node* ExtendedNode::branch(const double* x, unsigned n){
-  double d=IsolationForests::innerProduct(normalVector, x, n);
+  double d=IsolationForests::innerProduct(normalVector, x, idx, k);
   return d<pdotn ? left() : right();
 }
 
@@ -23,60 +23,73 @@ Node* ExtendedTreeBuilder::node(const unsigned* items, unsigned size, unsigned l
     return new FinalNode(size);
   }
   
-  std::normal_distribution<double> normal;
   double* nvec = new double[m];
-  for (unsigned i = 0; i < m; i++) {
-    nvec[i] = normal(engine);
+  std::normal_distribution<double> normal;
+  unsigned k=0;
+  unsigned* idx;
+  if (extensionLevel > 0 && extensionLevel < m) {
+    k=extensionLevel;
+    idx = IsolationForests::sampleWithoutReplacement(extensionLevel, m, false, engine);
+    for (unsigned i=0; i<m; ++i )
+      nvec[i]=0;
+    for (unsigned i = 0; i < extensionLevel; ++i) {
+      nvec[idx[i]] = normal(engine);
+    }
+  }
+  else{
+    k=m;
+    idx=new unsigned[m];
+    for (unsigned i = 0; i < m; i++) {
+      idx[i]=i;
+      nvec[i] = normal(engine);
+    }
   }
   std::vector<double> p(m);
   std::vector<double> xmin(m);
   std::vector<double> xmax(m);
-  for (unsigned i = 0; i < m; ++i) {
-    double cmin = data[items[0]*m+i], cmax=cmin;
+  for (unsigned i = 0; i < k; ++i) {
+    unsigned c=idx[i];
+    double cmin = data[items[0]*m+c], cmax=cmin;
     for (unsigned j = 1; j < size; ++j) {
-      double cur = data[items[j]*m+i];
+      double cur = data[items[j]*m+c];
       if (cur < cmin) {
         cmin = cur;
       } else if (cur > cmax) {
         cmax = cur;
       }
     }
-    xmin[i] = cmin;
-    xmax[i] = cmax;
+    xmin[c] = cmin;
+    xmax[c] = cmax;
   }
 
-  if (extensionLevel > 0 && extensionLevel < m) {
-    int k = m - extensionLevel;
-    unsigned* zeroidx = IsolationForests::sampleWithoutReplacement(k, m, false, engine);
-    for (int i = 0; i < k; ++i) {
-      nvec[zeroidx[i]] = 0;
-    }
-  }
   
   std::uniform_real_distribution<double> u(0,1);
-  for (unsigned i = 0; i < m; i++) {
+  for (unsigned i = 0; i < k; i++) {
+    unsigned c=idx[i];
     double r = u(engine);
-    p[i] = xmin[i] + r * (xmax[i] - xmin[i]);
+    p[c] = xmin[c] + r * (xmax[c] - xmin[c]);
   }
   
- double pdotn=IsolationForests::innerProduct(nvec, p.data(), m);
+  double pdotn=IsolationForests::innerProduct(nvec, p.data(), idx, k);
   unsigned nl=0;
+  std::vector<double> ds(size);
   for (unsigned i = 0; i < size; ++i) {
-    double d=IsolationForests::innerProduct(nvec, data+items[i]*m, m);
+    double d=IsolationForests::innerProduct(nvec, data+items[i]*m, idx, k);
+    ds[i]=d;
     if (d < pdotn) {
       ++nl;
     }
   }
     unsigned* XL=new unsigned[nl], *XR=new unsigned[size-nl];
     for (unsigned i = 0, il=0, ir=0; i < size; ++i) {
-      double d=IsolationForests::innerProduct(nvec, data+items[i]*m, m);
+      double d=ds[i];
       if (d < pdotn) {
         XL[il++]=items[i];
       } else {
         XR[ir++]=items[i];
       }
     }
-  
+
     Node* left, *right;
     if (nl <= 1)
       left=new FinalNode(nl);
@@ -86,7 +99,7 @@ Node* ExtendedTreeBuilder::node(const unsigned* items, unsigned size, unsigned l
       right=new FinalNode(size-nl);
     else
       right = node(XR, size-nl, level + 1);
-    return new ExtendedNode(items, size, left, right, nvec, pdotn);
+    return new ExtendedNode(items, size, left, right, nvec, pdotn, idx, k);
 }
 
 // [[Rcpp::export]]
